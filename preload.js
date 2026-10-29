@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld('petWindow', {
   onDropped: on('pet:dropped'),
   onAppear: on('pet:appear'),
   onSwing: on('pet:swing'),
+  onSkin: on('pet:skin'),
 })

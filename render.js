@@ -192,26 +192,44 @@
     return p
   }
 
+  // ── скины: та же форма, другие цвета и рисунок поверх ──────────────────────
+  // Скелет на Хэллоуин: тёмный костюм, белые кости (рёбра, позвоночник, ноги, руки), глаза светятся оранжевым.
+  const BONE = '#eee8d8'
+  const SKINS = {
+    classic: { body: C.body, legs: C.body, arms: C.body, eye: C.eye },
+    skeleton: {
+      body: '#26232d', legs: BONE, arms: BONE, eye: '#ff8c1a',
+      decor(x0, y0) {
+        rect(x0 + 7, y0 + 5, 2, 1, BONE)                     // нос
+        for (const y of [y0 + 7, y0 + 9]) rect(x0 + 3, y, 10, 1, BONE)   // рёбра
+        rect(x0 + 7, y0 + 7, 2, 5, BONE)                     // позвоночник
+        rect(x0 + 5, y0 + 11, 6, 1, BONE)                    // таз
+      },
+    },
+  }
+
   // ── рисование: те же детали, что у оригинала ───────────────────────────────
-  function draw(context, p) {
+  function draw(context, p, skinName = 'classic') {
+    const S = SKINS[skinName] ?? SKINS.classic
     ctx = context
     ctx.clearRect(0, 0, W, H)
     const x0 = 6 + p.bx, y0 = TOP + 7 + p.by                // туловище 16×12, как в старых кадрах
-    for (const dx of [0, 4, 10, 14]) rect(x0 + dx, y0 + 12, 2, 4, C.body)
-    rect(x0, y0, 16, 12, C.body)
+    for (const dx of [0, 4, 10, 14]) rect(x0 + dx, y0 + 12, 2, 4, S.legs)
+    rect(x0, y0, 16, 12, S.body)
+    S.decor?.(x0, y0)
     const [L, R] = p.arms
-    rect(x0 - 4 - L.dx, y0 + 4 + L.dy, 4, 4, C.body)
-    rect(x0 + 16 + R.dx, y0 + 4 + R.dy, 4, 4, C.body)
+    rect(x0 - 4 - L.dx, y0 + 4 + L.dy, 4, 4, S.arms)
+    rect(x0 + 16 + R.dx, y0 + 4 + R.dy, 4, 4, S.arms)
 
     const e = p.eyes, lx = e.lx ?? 0, ly = e.ly ?? 0
     for (const ex of [x0 + 2, x0 + 12]) {
-      if (e.kind === 'open') rect(ex + lx, y0 + 2 + ly, 2, 2, C.eye)
-      else if (e.kind === 'blink') rect(ex + lx, y0 + 3, 2, 1, C.eye)
-      else if (e.kind === 'wide') rect(ex + lx, y0 + 1 + ly, 2, 4, C.eye)
-      else if (e.kind === 'happy') { rect(ex, y0 + 2, 2, 1, C.eye); rect(ex - 1, y0 + 3, 4, 1, C.eye) }
+      if (e.kind === 'open') rect(ex + lx, y0 + 2 + ly, 2, 2, S.eye)
+      else if (e.kind === 'blink') rect(ex + lx, y0 + 3, 2, 1, S.eye)
+      else if (e.kind === 'wide') rect(ex + lx, y0 + 1 + ly, 2, 4, S.eye)
+      else if (e.kind === 'happy') { rect(ex, y0 + 2, 2, 1, S.eye); rect(ex - 1, y0 + 3, 4, 1, S.eye) }
     }
     for (const extra of p.extras) extra({ x0, y0 })
   }
 
-  window.PetRender = { W, H, TOP, pose, draw, CELEBRATE_MS }
+  window.PetRender = { W, H, TOP, SKINS: Object.keys(SKINS), pose, draw, CELEBRATE_MS }
 })()

@@ -19,6 +19,7 @@
 <div id="sheet"></div>
 <script>
   const R = window.PetRender
+  const SKIN = new URLSearchParams(location.search).get('skin') ?? 'classic'
   const SCENES = [
     ['idle', [0, 1400], {}], ['idle', [0, 300, 700], { fidget: 'wave', label: 'wave' }],
     ['idle', [200, 700, 1200], { fidget: 'stretch', label: 'stretch' }], ['idle', [60, 250, 370, 560], { fidget: 'hop', label: 'hop' }],
@@ -35,7 +36,7 @@
     const row = document.createElement('div'); row.className = 'row'; scene.append(row)
     for (const t of times) {
       const c = document.createElement('canvas'); c.width = R.W; c.height = R.H; c.title = `${t} мс`
-      R.draw(c.getContext('2d'), R.pose(layer, t, { ...opts, ft: t }))
+      R.draw(c.getContext('2d'), R.pose(layer, t, { ...opts, ft: t }), SKIN)
       row.append(c)
     }
   }
@@ -44,7 +45,7 @@
   const layer = params.get('layer') ?? 'done', start = performance.now()
   const tick = now => {
     const t = now - start
-    R.draw(live.getContext('2d'), R.pose(layer, layer === 'done' ? t % 4000 : t, { fidget: params.get('fidget'), ft: t % 2000, mark: params.get('mark'), blink: (t % 3000) < 130 }))
+    R.draw(live.getContext('2d'), R.pose(layer, layer === 'done' ? t % 4000 : t, { fidget: params.get('fidget'), ft: t % 2000, mark: params.get('mark'), blink: (t % 3000) < 130 }), SKIN)
     requestAnimationFrame(tick)
   }
   requestAnimationFrame(tick)

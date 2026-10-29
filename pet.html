@@ -29,10 +29,15 @@
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = false
 
-  // «Работа за ноутбуком» — оригинальные кадры (24 кадра по 90 мс, 87×72 пикселя = 29×24 клетки).
-  const typing = new Image()
-  typing.src = 'assets/thinking.sheet.png'
-  typing.onerror = () => console.error('claude-pet: cannot load ' + typing.src)
+  // «Работа за ноутбуком» — оригинальные кадры (24 кадра по 90 мс, 87×72 пикселя = 29×24 клетки), у каждого скина свои.
+  let skin = 'classic'
+  const typingSheets = {}
+  for (const [name, file] of [['classic', 'thinking.sheet.png'], ['skeleton', 'thinking.skeleton.png']]) {
+    const img = new Image()
+    img.src = 'assets/' + file
+    img.onerror = () => console.error('claude-pet: cannot load ' + img.src)
+    typingSheets[name] = img
+  }
   const TYPING_FRAMES = 24, TYPING_MS = 90
 
   // ── состояние ──────────────────────────────────────────────────────────────
@@ -76,6 +81,7 @@
     const t = now - layerAt
     if (layer === 'thinking') {
       ctx.clearRect(0, 0, R.W, R.H)
+      const typing = typingSheets[skin] ?? typingSheets.classic
       if (typing.complete && typing.naturalWidth > 0) {
         const index = Math.floor(t / TYPING_MS) % TYPING_FRAMES
         ctx.drawImage(typing, index * 87, 0, 87, 72, 0, R.TOP, 29, 24)
@@ -87,7 +93,7 @@
         fidget: layer === 'idle' ? fidget : null, ft: now - fidgetAt,
         swing: now - swingAt < 250 ? swing : 0,
         heart: now - heartAt,
-      }))
+      }), skin)
     }
     requestAnimationFrame(frame)
   }
@@ -121,6 +127,7 @@
     appearing = true; touch(); apply()
     later('appear', APPEAR_MS, () => { appearing = false; apply() })
   })
+  window.petWindow.onSkin(name => { if (R.SKINS.includes(name)) skin = name })
   window.petWindow.onSwing(dir => { if (dir !== 0) { swing = dir; swingAt = performance.now() } })
 
   // ── сам по себе: оглядывается, иногда чем-нибудь занимается ────────────────

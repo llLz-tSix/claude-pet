@@ -35,7 +35,7 @@ const HIDE_AFTER_MS = 4000      // Claude закрыли — питомец ух
 const CONFIG_FILE = () => path.join(app.getPath('userData'), 'config.json')
 let config = {
   appProcess: 'Claude', appId: '', fallbackUrl: 'https://claude.ai/recents', port: 47800, lastChatUrl: '', lastSource: '',
-  autostart: true, followClaude: true, hooks: true, anyDisplay: false, notify: true, size: 0.8, stopWords: '', allowWords: '',
+  autostart: true, followClaude: true, hooks: true, anyDisplay: false, notify: true, size: 0.8, skin: 'classic', stopWords: '', allowWords: '',
 }
 function loadConfig() {
   try { config = { ...config, ...JSON.parse(fs.readFileSync(CONFIG_FILE(), 'utf8')) } } catch { /* первый запуск */ }
@@ -292,7 +292,7 @@ function createWindow() {
     lastKey = ''                                   // после перезагрузки заново прислать состояние
     setTimeout(() => { if (win && !win.isDestroyed()) win.reload() }, 1000)
   })
-  wc.on('did-finish-load', () => { lastKey = '' })
+  wc.on('did-finish-load', () => { lastKey = ''; wc.send('pet:skin', config.skin) })
   wc.on('did-fail-load', (_event, _code, description) => log(`страница не загрузилась: ${description}`))
   wc.on('console-message', (...args) => {        // подпись события разная в версиях Electron
     const event = args[0]
@@ -315,11 +315,20 @@ function applyHooks() {
   } catch (error) { log(`хуки: ${error.message}`) }
 }
 
+const SKINS = [['classic', 'Обычный'], ['skeleton', 'Скелет 🎃']]
+function setSkin(id) {
+  config.skin = id
+  saveConfig()
+  win?.webContents.send('pet:skin', id)
+  win?.webContents.send('pet:flash')            // переоделся — радуется
+}
+
 // Меню — только самое нужное. Остальные настройки (уведомления, автозапуск, хуки, браузер) — в config.json.
 function buildMenu() {
   return Menu.buildFromTemplate([
     { label: 'Открыть Claude', click: openClaude },
     { label: 'Спрятать', click: () => { hiddenByUser = true; pinnedUntil = 0; setVisible(false) } },
+    { label: 'Скин', submenu: SKINS.map(([id, label]) => ({ label, type: 'radio', checked: config.skin === id, click: () => setSkin(id) })) },
     { type: 'separator' },
     { label: 'Выход', click: () => app.quit() },
   ])
