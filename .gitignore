@@ -1,0 +1,5 @@
+node_modules/
+electron/
+electron.tmp/
+*.log
+.DS_Store

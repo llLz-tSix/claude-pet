@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Claude Pet",
+  "version": "1.0",
+  "description": "Сообщает питомцу на рабочем столе, что Claude сейчас отвечает.",
+  "host_permissions": ["http://127.0.0.1:47800/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["https://claude.ai/*"], "js": ["content.js"], "run_at": "document_idle" }]
+}

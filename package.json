@@ -1,0 +1,14 @@
+{
+  "name": "claude-pet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Питомец Claude на рабочем столе (Windows и macOS): сам появляется вместе с Claude, показывает, что Claude работает, ждёт тебя или закончил; клик возвращает в чат.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "preview": "electron tools/snapshot.js preview.png"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

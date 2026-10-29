@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Claude pet — кадры</title>
+<style>
+  body { margin: 16px; background: #3a3a46; color: #ddd; font: 12px system-ui, sans-serif; }
+  h2 { font-size: 11px; margin: 6px 0 2px; } .scene { display: inline-block; vertical-align: top; margin: 0 14px 6px 0; }
+  .row { display: inline-flex; margin-right: 18px; vertical-align: top; gap: 6px; flex-wrap: wrap; }
+  canvas { width: 116px; height: 120px; image-rendering: pixelated; background: #4a4a58; }
+  #live { width: 232px; height: 240px; }
+</style>
+<script src="../render.js"></script>
+</head>
+<body>
+<!-- Раскадровка всех сценок: открыть через локальный сервер из папки claude-pet (python -m http.server). -->
+<h2>вживую (?layer=…)</h2>
+<canvas id="live"></canvas>
+<div id="sheet"></div>
+<script>
+  const R = window.PetRender
+  const SCENES = [
+    ['idle', [0, 1400], {}], ['idle', [0, 300, 700], { fidget: 'wave', label: 'wave' }],
+    ['idle', [200, 700, 1200], { fidget: 'stretch', label: 'stretch' }], ['idle', [60, 250, 370, 560], { fidget: 'hop', label: 'hop' }],
+    ['idle', [0, 250], { fidget: 'dance', label: 'dance' }], ['idle', [0], { blink: true, label: 'blink' }],
+    ['idle', [100, 300, 500, 700], { fidget: 'juggle', label: 'juggle' }], ['sleep', [0, 1000, 2000]], ['waiting', [0, 300], { mark: 'approval' }],
+    ['waiting', [0], { mark: 'question' }], ['waiting', [0], { mark: 'plan' }],
+    ['done', [80, 300, 400, 700, 1000, 1300, 2000]], ['proud', [0, 4000]], ['joy', [0, 250, 500], { heart: 300 }],
+    ['held', [0, 300], { swing: 1 }], ['drop', [50, 200, 400]], ['appear', [60, 250, 450, 700, 900]],
+  ]
+  const sheet = document.getElementById('sheet')
+  for (const [layer, times, opts] of SCENES) {
+    const scene = document.createElement('div'); scene.className = 'scene'; sheet.append(scene)
+    const h = document.createElement('h2'); h.textContent = opts?.label ? `${layer} · ${opts.label}` : layer; scene.append(h)
+    const row = document.createElement('div'); row.className = 'row'; scene.append(row)
+    for (const t of times) {
+      const c = document.createElement('canvas'); c.width = R.W; c.height = R.H; c.title = `${t} мс`
+      R.draw(c.getContext('2d'), R.pose(layer, t, { ...opts, ft: t }))
+      row.append(c)
+    }
+  }
+  const params = new URLSearchParams(location.search)
+  const live = document.getElementById('live'); live.width = R.W; live.height = R.H
+  const layer = params.get('layer') ?? 'done', start = performance.now()
+  const tick = now => {
+    const t = now - start
+    R.draw(live.getContext('2d'), R.pose(layer, layer === 'done' ? t % 4000 : t, { fidget: params.get('fidget'), ft: t % 2000, mark: params.get('mark'), blink: (t % 3000) < 130 }))
+    requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+</script>
+</body>
+</html>

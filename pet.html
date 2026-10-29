@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<!-- Своим inline-скрипту и стилям, а также скриптам из папки нужно явное разрешение, иначе окно будет пустым. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src file: data:; style-src 'unsafe-inline'; script-src file: 'unsafe-inline'">
+<title>claude-pet</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden;
+               user-select: none; -webkit-user-select: none; cursor: grab; }
+  body.dragging { cursor: grabbing; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+</style>
+<script src="render.js"></script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+<script>
+  const R = window.PetRender
+  const HOST_STATES = ['idle', 'thinking', 'waiting', 'done']
+  const MARKS = { approval: 'approval', question: 'question', 'plan-review': 'plan' }
+  const FLASH_MS = 1400, DROP_MS = 520, APPEAR_MS = 1500, SLEEP_AFTER_MS = 180000
+  const FIDGETS = { wave: 1500, stretch: 1400, hop: 650, look: 2000, juggle: 1000, dance: 2000 }
+
+  const canvas = document.getElementById('view')
+  canvas.width = R.W; canvas.height = R.H
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingEnabled = false
+
+  // «Работа за ноутбуком» — оригинальные кадры (24 кадра по 90 мс, 87×72 пикселя = 29×24 клетки).
+  const typing = new Image()
+  typing.src = 'assets/thinking.sheet.png'
+  typing.onerror = () => console.error('claude-pet: cannot load ' + typing.src)
+  const TYPING_FRAMES = 24, TYPING_MS = 90
+
+  // ── состояние ──────────────────────────────────────────────────────────────
+  let base = 'idle', mark = null
+  let hovering = false, flashing = false, dragging = false, dropping = false, appearing = false
+  let sleeping = false, celebrating = false
+  let fidget = null, fidgetAt = 0
+  let swing = 0, swingAt = 0, heartAt = -1e9
+  let lastActive = Date.now()
+  let look = { x: 0, y: 0 }, lastLookAt = Date.now()
+  let layer = '', layerAt = performance.now()
+  const timers = {}
+  const later = (name, ms, fn) => { clearTimeout(timers[name]); timers[name] = setTimeout(fn, ms) }
+
+  /** Что ближе к руке, то важнее того, что делает Claude. */
+  const shown = () => {
+    if (dragging) return 'held'
+    if (dropping) return 'drop'
+    if (hovering || flashing) return 'joy'
+    if (appearing) return 'appear'
+    if (base === 'done') return celebrating ? 'done' : 'proud'
+    if (base === 'idle') return sleeping ? 'sleep' : 'idle'
+    return base                                   // thinking | waiting
+  }
+  const apply = () => {
+    const next = shown()
+    if (next !== layer) { layer = next; layerAt = performance.now() }
+  }
+  const touch = () => { lastActive = Date.now(); if (sleeping) { sleeping = false; apply() } }
+
+  // ── моргание: случайно, иногда дважды подряд ───────────────────────────────
+  let blinkAt = 0, blinkTwice = false
+  const blinking = now => {
+    if (now > blinkAt + 600) { blinkTwice = Math.random() < 0.2; blinkAt = now + 2200 + Math.random() * 4000 }
+    const d = now - blinkAt
+    return (d >= 0 && d < 130) || (blinkTwice && d >= 260 && d < 390)
+  }
+
+  // ── кадр ───────────────────────────────────────────────────────────────────
+  function frame(now) {
+    const t = now - layerAt
+    if (layer === 'thinking') {
+      ctx.clearRect(0, 0, R.W, R.H)
+      if (typing.complete && typing.naturalWidth > 0) {
+        const index = Math.floor(t / TYPING_MS) % TYPING_FRAMES
+        ctx.drawImage(typing, index * 87, 0, 87, 72, 0, R.TOP, 29, 24)
+      }
+    } else {
+      if (fidget !== null && now - fidgetAt > FIDGETS[fidget]) fidget = null
+      R.draw(ctx, R.pose(layer, t, {
+        look, mark, blink: blinking(now),
+        fidget: layer === 'idle' ? fidget : null, ft: now - fidgetAt,
+        swing: now - swingAt < 250 ? swing : 0,
+        heart: now - heartAt,
+      }))
+    }
+    requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+
+  // ── что сообщает главный процесс ───────────────────────────────────────────
+  window.petWindow.onState(message => {
+    if (!HOST_STATES.includes(message?.state)) return
+    const next = message.state
+    const same = next === base
+    base = next
+    mark = next === 'waiting' ? (MARKS[message.mark] ?? 'approval') : null
+    touch()
+    if (!same) {
+      fidget = null
+      celebrating = next === 'done'
+      if (celebrating) later('done', R.CELEBRATE_MS, () => { celebrating = false; apply() })
+    }
+    apply()
+  })
+  window.petWindow.onLook(v => { lastLookAt = Date.now(); look = { x: v.x, y: v.y } })
+  window.petWindow.onFlash(() => {
+    flashing = true; heartAt = performance.now(); touch(); apply()
+    later('flash', FLASH_MS, () => { flashing = false; apply() })
+  })
+  window.petWindow.onDropped(() => {
+    dropping = true; apply()
+    later('drop', DROP_MS, () => { dropping = false; apply() })
+  })
+  window.petWindow.onAppear(() => {
+    appearing = true; touch(); apply()
+    later('appear', APPEAR_MS, () => { appearing = false; apply() })
+  })
+  window.petWindow.onSwing(dir => { if (dir !== 0) { swing = dir; swingAt = performance.now() } })
+
+  // ── сам по себе: оглядывается, иногда чем-нибудь занимается ────────────────
+  setInterval(() => {
+    if (Date.now() - lastLookAt > 7000 && !sleeping) {
+      const pick = [[-1, 0], [1, 0], [0, 0], [0, 0], [1, 1], [-1, 1], [0, 1]][Math.floor(Math.random() * 7)]
+      look = { x: pick[0], y: pick[1] }
+    }
+  }, 2500)
+  const scheduleFidget = () => setTimeout(() => {
+    if (layer === 'idle' && fidget === null) {
+      const names = Object.keys(FIDGETS)
+      fidget = names[Math.floor(Math.random() * names.length)]
+      fidgetAt = performance.now()
+    }
+    scheduleFidget()
+  }, 9000 + Math.random() * 14000)
+  scheduleFidget()
+
+  // Три тихие минуты — и питомец засыпает; любое действие будит.
+  setInterval(() => {
+    const calm = base === 'idle' && !hovering && !dragging && !dropping
+    if (calm && !sleeping && Date.now() - lastActive > SLEEP_AFTER_MS) { sleeping = true; apply() }
+  }, 5000)
+  apply()
+
+  // ── мышь ───────────────────────────────────────────────────────────────────
+  // Наведение показывает радость; mouseenter не всплывает, поэтому есть и mouseover.
+  const enter = () => { touch(); if (!hovering) { hovering = true; apply() } }
+  const leave = () => { if (hovering) { hovering = false; apply() } }
+  addEventListener('mouseenter', enter)
+  addEventListener('mouseover', enter)
+  addEventListener('mouseleave', leave)
+  addEventListener('mouseout', event => { if (event.relatedTarget === null) leave() })
+
+  // Страница сообщает только о нажатии и отпускании; движение считает главный процесс.
+  const finishDrag = () => {
+    if (!dragging) return
+    dragging = false
+    document.body.classList.remove('dragging')
+    window.petWindow.dragEnd()
+    apply()
+  }
+  addEventListener('mousedown', event => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    touch()
+    dragging = true                          // каждое нажатие начинает жест заново
+    document.body.classList.add('dragging')
+    window.petWindow.dragStart()
+    apply()
+  })
+  addEventListener('mouseup', finishDrag)
+  addEventListener('blur', finishDrag)
+  addEventListener('contextmenu', event => { event.preventDefault(); window.petWindow.menu() })
+</script>
+</body>
+</html>
