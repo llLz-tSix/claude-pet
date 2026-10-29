@@ -15,6 +15,9 @@ const { HookLink, installHooks, removeHooks } = require('./hooks')
 
 // Прозрачное окно на Windows надёжно рисуется только программным композитингом.
 app.disableHardwareAcceleration()
+// Питомцу не нужны отдельные процессы графики и сети (рисует программно, грузит только свои файлы) — минус два процесса.
+app.commandLine.appendSwitch('in-process-gpu')
+app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess2')
 // Второй экземпляр сразу завершается (первому он лишь сообщает о себе через second-instance).
 if (!app.requestSingleInstanceLock()) app.exit(0)
 app.setAppUserModelId('Claude pet')     // имя в уведомлениях Windows вместо «electron.app.Electron»
@@ -498,7 +501,7 @@ app.whenReady().then(() => {
   }
   const port = Number(config.port) || 47800
   createServer({ browser, hooks }, port, log, poll)
-  uia.start()
+  void uia.start(app.getPath('userData'), log)
   setAutostart(config.autostart !== false)              // заодно заменяет старую запись без кавычек
   applyHooks()
   log(`запуск${BACKGROUND ? ' (в фоне, жду Claude)' : ''}`)

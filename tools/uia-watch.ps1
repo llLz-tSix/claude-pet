@@ -44,5 +44,6 @@ while ($true) {
   }
   if ($Dump) { if (-not $dumped) { Write-Output '__no_window__' }; exit 0 }
   if ($state -ne $last) { Write-Output $state; [Console]::Out.Flush(); $last = $state }
-  Start-Sleep -Milliseconds 600
+  # Claude closed: nothing to read, check less often.
+  if ($state -eq 'none') { Start-Sleep -Milliseconds 2000 } else { Start-Sleep -Milliseconds 700 }
 }

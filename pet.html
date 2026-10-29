@@ -26,8 +26,14 @@
 
   const canvas = document.getElementById('view')
   canvas.width = R.W; canvas.height = R.H
-  const ctx = canvas.getContext('2d')
+  const view = canvas.getContext('2d')
+  // Кадр рисуется в невидимый буфер, а в окно попадает, только если картинка изменилась: прозрачное окно
+  // перерисовывается программно, и каждая лишняя перерисовка стоит заметного процессора.
+  const buffer = document.createElement('canvas')
+  buffer.width = R.W; buffer.height = R.H
+  const ctx = buffer.getContext('2d', { willReadFrequently: true })
   ctx.imageSmoothingEnabled = false
+  const FRAME_MS = 40              // 25 кадров в секунду: самая быстрая смена в анимациях — 90 мс
 
   // «Работа за ноутбуком» — оригинальные кадры (24 кадра по 90 мс, 87×72 пикселя = 29×24 клетки), у каждого скина свои.
   let skin = 'classic'
@@ -77,7 +83,20 @@
   }
 
   // ── кадр ───────────────────────────────────────────────────────────────────
-  function frame(now) {
+  let shownPixels = null
+  function frame() {
+    setTimeout(frame, FRAME_MS)
+    if (document.hidden) return                    // спрятан — не рисуем вовсе
+    const now = performance.now()
+    render(now)
+    const image = ctx.getImageData(0, 0, R.W, R.H)
+    const pixels = new Uint32Array(image.data.buffer)
+    if (shownPixels !== null && pixels.every((value, i) => value === shownPixels[i])) return
+    shownPixels = pixels
+    view.putImageData(image, 0, 0)
+  }
+
+  function render(now) {
     const t = now - layerAt
     if (layer === 'thinking') {
       ctx.clearRect(0, 0, R.W, R.H)
@@ -95,9 +114,9 @@
         heart: now - heartAt,
       }), skin)
     }
-    requestAnimationFrame(frame)
   }
-  requestAnimationFrame(frame)
+  frame()
+  document.addEventListener('visibilitychange', () => { shownPixels = null })   // показали снова — освежить кадр
 
   // ── что сообщает главный процесс ───────────────────────────────────────────
   window.petWindow.onState(message => {

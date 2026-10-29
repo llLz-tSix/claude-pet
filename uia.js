@@ -1,39 +1,56 @@
 /**
- * Работа приложения Claude Desktop — без флагов и настроек. Windows: фоновый PowerShell (tools/uia-watch.ps1)
- * читает окно Claude через Windows UI Automation и печатает: thinking | waiting | idle | none.
+ * Работа приложения Claude Desktop — без флагов и настроек. Windows: фоновый помощник читает окно Claude через
+ * Windows UI Automation и печатает: thinking | waiting | idle | none. Помощник — tools/uia-watch.cs, его один раз
+ * собирает csc.exe, который есть в каждой Windows; если сборка не удалась — тот же код на PowerShell
+ * (tools/uia-watch.ps1), он заметно тяжелее.
  * macOS: только «приложение запущено / нет» (см. watchMac).
  */
+const fs = require('node:fs')
 const path = require('node:path')
 const { spawn, execFile } = require('node:child_process')
 const DoneTracker = require('./done')
 
+const TOOLS = path.join(__dirname, 'tools')
 const psArgs = script => ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script]
 const extraArgs = ({ extraStop, extraAllow }) => [
   ...(extraStop ? ['-ExtraStop', extraStop] : []), ...(extraAllow ? ['-ExtraAllow', extraAllow] : [])]
 
-/** Имена всех кнопок окна Claude — чтобы понять, что видит питомец, если он перестал реагировать. */
-function dumpButtons(script = path.join(__dirname, 'tools', 'uia-watch.ps1')) {
-  return new Promise(resolve => {
-    if (process.platform !== 'win32') return resolve([])
-    execFile('powershell.exe', [...psArgs(script), '-Dump'], { windowsHide: true, timeout: 20000, encoding: 'utf8' },
-      (error, stdout) => resolve(error ? ['__error__ ' + error.message] : String(stdout).split(/\r?\n/).map(x => x.trim()).filter(Boolean)))
-  })
+/** Собирает помощника в dir, если его нет или исходник новее. @returns {Promise<string|null>} путь к exe */
+function buildHelper(dir, log) {
+  const source = path.join(TOOLS, 'uia-watch.cs')
+  const exe = path.join(dir, 'uia-watch.exe')
+  try {
+    if (fs.existsSync(exe) && fs.statSync(exe).mtimeMs >= fs.statSync(source).mtimeMs) return Promise.resolve(exe)
+  } catch { return Promise.resolve(null) }
+  const framework = path.join(process.env.WINDIR ?? 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319')
+  const csc = path.join(framework, 'csc.exe')
+  if (!fs.existsSync(csc)) return Promise.resolve(null)
+  const args = ['-nologo', '-codepage:65001', '-optimize', '-target:exe', `-out:${exe}`, `-lib:${path.join(framework, 'WPF')}`,
+    '-r:UIAutomationClient.dll', '-r:UIAutomationTypes.dll', '-r:WindowsBase.dll', source]
+  return new Promise(resolve => execFile(csc, args, { windowsHide: true, timeout: 60000 }, (error, stdout) => {
+    if (error) { log(`помощник для окна Claude не собран, работаю через PowerShell: ${String(stdout || error.message).trim().slice(0, 300)}`); resolve(null) }
+    else { log('помощник для окна Claude собран'); resolve(exe) }
+  }))
 }
 
 class UiaWatcher {
-  constructor({ spawnFn = spawn, script = path.join(__dirname, 'tools', 'uia-watch.ps1'), platform = process.platform, extraStop = '', extraAllow = '' } = {}) {
-    Object.assign(this, { spawnFn, script, platform, extraStop, extraAllow })
+  constructor({ spawnFn = spawn, platform = process.platform, extraStop = '', extraAllow = '' } = {}) {
+    Object.assign(this, { spawnFn, platform, extraStop, extraAllow })
     this.raw = 'none'
     this.tracker = new DoneTracker()
     this.child = null
+    this.helper = undefined          // undefined — ещё не собирали, null — нет, работаем через PowerShell
     this.stopped = false
   }
 
-  start() {
+  /** dir — куда положить собранного помощника (папка данных питомца). */
+  async start(dir, log = () => {}) {
     if (this.platform === 'darwin') { this.watchMac(); return }
-    if (this.platform !== 'win32' || this.child !== null) return
-    const child = this.spawnFn('powershell.exe',
-      [...psArgs(this.script), ...extraArgs(this)], { windowsHide: true })
+    if (this.platform !== 'win32' || this.child !== null || this.stopped) return
+    if (this.helper === undefined) this.helper = dir ? await buildHelper(dir, log) : null
+    const child = this.helper
+      ? this.spawnFn(this.helper, extraArgs(this), { windowsHide: true })
+      : this.spawnFn('powershell.exe', [...psArgs(path.join(TOOLS, 'uia-watch.ps1')), ...extraArgs(this)], { windowsHide: true })
     this.child = child
     let buffer = ''
     child.stdout.on('data', chunk => {
@@ -45,7 +62,7 @@ class UiaWatcher {
     child.on('exit', () => {
       this.child = null
       this.raw = 'none'
-      if (!this.stopped) setTimeout(() => this.start(), 5000)
+      if (!this.stopped) setTimeout(() => this.start(dir, log), 5000)
     })
   }
 
@@ -77,4 +94,4 @@ class UiaWatcher {
   }
 }
 
-module.exports = { UiaWatcher, dumpButtons }
+module.exports = { UiaWatcher }

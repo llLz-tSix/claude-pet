@@ -72,5 +72,5 @@ npm install && npm start
 - `render.js` — рисует питомца по клеткам: туловище, ноги и руки-квадратики не меняют форму, позы считаются из времени.
 - `tools/preview.html` — раскадровка всех сценок; `npm run preview` сохраняет её в `preview.png`.
 - GIF для README: `electron tools/make-gifs.js <папка>` рисует кадры, `python tools/make-gifs.py <папка> docs` собирает GIF.
-- `main.js` — окно, меню, появление вместе с Claude; `hooks.js` — хуки Claude Code; `uia.js` — окно приложения;
+- `main.js` — окно, меню, появление вместе с Claude; `hooks.js` — хуки Claude Code; `uia.js` — окно приложения (на Windows через маленький помощник `tools/uia-watch.cs`, который питомец сам собирает встроенным в Windows csc.exe при первом запуске);
   `browser.js` — локальный сервер для хуков и расширения.
