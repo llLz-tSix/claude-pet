@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Claude pet — кадры для GIF</title>
+<script src="../render.js"></script>
+</head>
+<body>
+<!-- Сценки для GIF в README: tools/make-gifs.js вызывает renderScene() и сохраняет кадры. -->
+<script>
+  const R = window.PetRender
+  const STEP = 60                   // мс на кадр GIF (~16 кадров в секунду)
+  const SCALE = 6                   // клетка = 6 пикселей
+
+  // Сценка — цепочка отрезков [слой, длительность, опции]. 'thinking' — готовые кадры работы за ноутбуком.
+  const LONG_DONE = R.CELEBRATE_MS
+  const SCENES = {
+    demo: [['appear', 1500], ['idle', 1500], ['thinking', 2520], ['waiting', 2000, { mark: 'approval' }], ['done', LONG_DONE], ['proud', 1500]],
+    idle: [['idle', 1200], ['idle', 1500, { fidget: 'wave' }], ['idle', 1000, { fidget: 'juggle' }], ['idle', 650, { fidget: 'hop' }],
+      ['idle', 2000, { fidget: 'dance' }], ['idle', 1400, { fidget: 'stretch' }]],
+    thinking: [['thinking', 2160]],
+    waiting: [['waiting', 1560, { mark: 'approval' }], ['waiting', 1560, { mark: 'question' }], ['waiting', 1560, { mark: 'plan' }]],
+    done: [['done', LONG_DONE], ['proud', 1800]],
+    sleep: [['sleep', 3200]],
+    joy: [['joy', 1320, { heart: 0 }], ['held', 1200, { swing: 1 }], ['drop', 600]],
+  }
+
+  const sheets = {}
+  const load = (skin, file) => new Promise(resolve => {
+    const img = new Image(); img.onload = () => { sheets[skin] = img; resolve() }; img.src = '../assets/' + file
+  })
+  window.ready = Promise.all([load('classic', 'thinking.sheet.png'), load('skeleton', 'thinking.skeleton.png')])
+
+  const cell = document.createElement('canvas'); cell.width = R.W; cell.height = R.H
+  const cctx = cell.getContext('2d')
+  const big = document.createElement('canvas'); big.width = R.W * SCALE; big.height = R.H * SCALE
+  const bctx = big.getContext('2d'); bctx.imageSmoothingEnabled = false
+
+  /** @returns {string[]} кадры PNG (data URL) */
+  window.renderScene = (name, skin = 'classic') => {
+    const frames = []
+    for (const [layer, ms, opts = {}] of SCENES[name]) {
+      for (let t = 0; t < ms; t += STEP) {
+        if (layer === 'thinking') {
+          cctx.clearRect(0, 0, R.W, R.H)
+          cctx.drawImage(sheets[skin], (Math.floor(t / 90) % 24) * 87, 0, 87, 72, 0, R.TOP, 29, 24)
+        } else {
+          R.draw(cctx, R.pose(layer, t, { ...opts, ft: t, heart: opts.heart !== undefined ? t : undefined, blink: (t % 2700) > 2580 }), skin)
+        }
+        bctx.clearRect(0, 0, big.width, big.height)
+        bctx.drawImage(cell, 0, 0, big.width, big.height)
+        frames.push(big.toDataURL('image/png'))
+      }
+    }
+    return frames
+  }
+  window.SCENE_NAMES = Object.keys(SCENES)
+  window.STEP = STEP
+</script>
+</body>
+</html>
